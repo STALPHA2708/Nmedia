@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>API Test</title>
+</head>
+<body>
+    <h1>API Test</h1>
+    <button onclick="testAPI()">Test /api/test</button>
+    <button onclick="testAuth()">Test /api/auth/test</button>
+    <button onclick="testLogin()">Test Login</button>
+    <div id="results"></div>
+
+    <script>
+        async function testAPI() {
+            try {
+                const response = await fetch('/api/test');
+                const data = await response.json();
+                document.getElementById('results').innerHTML = `<h3>/api/test:</h3><pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('results').innerHTML = `<h3>Error:</h3><pre>${error.message}</pre>`;
+            }
+        }
+
+        async function testAuth() {
+            try {
+                const response = await fetch('/api/auth/test');
+                const data = await response.json();
+                document.getElementById('results').innerHTML = `<h3>/api/auth/test:</h3><pre>${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('results').innerHTML = `<h3>Error:</h3><pre>${error.message}</pre>`;
+            }
+        }
+
+        async function testLogin() {
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: 'admin@nomedia.ma',
+                        password: 'admin123'
+                    })
+                });
+                const data = await response.json();
+                document.getElementById('results').innerHTML = `<h3>Login test:</h3><pre>Status: ${response.status}\n${JSON.stringify(data, null, 2)}</pre>`;
+            } catch (error) {
+                document.getElementById('results').innerHTML = `<h3>Login Error:</h3><pre>${error.message}</pre>`;
+            }
+        }
+    </script>
+</body>
+</html>

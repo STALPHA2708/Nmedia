@@ -1,0 +1,2 @@
+# This directory is used by Docker to initialize the PostgreSQL database
+# Any .sql files placed here will be executed when the container first starts

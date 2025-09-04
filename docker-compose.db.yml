@@ -1,0 +1,31 @@
+version: '3.8'
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: nomedia_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nomedia_production
+      POSTGRES_USER: nomedia_user
+      POSTGRES_PASSWORD: nomedia_secure_password_2024
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/init:/docker-entrypoint-initdb.d
+    networks:
+      - nomedia_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nomedia_user -d nomedia_production"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  nomedia_network:
+    driver: bridge

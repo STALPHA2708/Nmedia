@@ -1,0 +1,304 @@
+/* Responsive Enhancements for Nomedia Production */
+/* Mobile-first approach with enhanced touch targets and layouts */
+
+/* Extra small screens (phones in portrait) */
+@media (max-width: 474px) {
+  /* Increase touch targets for mobile */
+  .btn-mobile {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 0.75rem 1rem;
+  }
+  
+  /* Better spacing for mobile cards */
+  .card-mobile {
+    margin: 0.5rem;
+    padding: 1rem;
+  }
+  
+  /* Stack navigation items vertically on very small screens */
+  .nav-mobile {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  /* Improve table responsiveness */
+  .table-mobile {
+    font-size: 0.875rem;
+  }
+  
+  .table-mobile th,
+  .table-mobile td {
+    padding: 0.5rem 0.25rem;
+  }
+}
+
+/* Small screens (phones in landscape, small tablets) */
+@media (min-width: 475px) and (max-width: 639px) {
+  /* Slightly larger touch targets */
+  .btn-sm {
+    min-height: 40px;
+    padding: 0.625rem 0.875rem;
+  }
+  
+  /* Better form layouts */
+  .form-grid-xs {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+}
+
+/* Medium screens (tablets) */
+@media (min-width: 640px) and (max-width: 1023px) {
+  /* Tablet-optimized layouts */
+  .grid-tablet {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1.5rem;
+  }
+  
+  /* Better sidebar/content ratios */
+  .content-tablet {
+    padding: 1.5rem;
+  }
+  
+  /* Optimized dialog sizes */
+  .dialog-tablet {
+    max-width: 90vw;
+    max-height: 90vh;
+  }
+}
+
+/* Large screens (laptops, desktops) */
+@media (min-width: 1024px) {
+  /* Desktop optimizations */
+  .grid-desktop {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2rem;
+  }
+  
+  /* Improved content spacing */
+  .content-desktop {
+    padding: 2rem;
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+}
+
+/* Touch device optimizations */
+@media (hover: none) and (pointer: coarse) {
+  /* Larger touch targets for all interactive elements */
+  button,
+  .btn,
+  [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  
+  /* Remove hover states on touch devices */
+  .hover\:bg-accent:hover {
+    background-color: inherit;
+  }
+  
+  /* Better focus states for touch */
+  button:focus,
+  input:focus,
+  select:focus,
+  textarea:focus {
+    outline: 2px solid rgb(99, 102, 241);
+    outline-offset: 2px;
+  }
+}
+
+/* High DPI screen optimizations */
+@media (min-resolution: 2dppx) {
+  /* Sharper borders and shadows */
+  .card,
+  .border {
+    border-width: 0.5px;
+  }
+  
+  /* Optimized text rendering */
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}
+
+/* Print styles */
+@media print {
+  /* Hide navigation and controls */
+  nav,
+  .nav,
+  button,
+  .btn {
+    display: none !important;
+  }
+  
+  /* Optimize content for printing */
+  .print-content {
+    margin: 0;
+    padding: 1rem;
+    box-shadow: none;
+    border: none;
+  }
+  
+  /* Force black text on white background */
+  * {
+    color: black !important;
+    background: white !important;
+  }
+}
+
+/* Dark mode optimizations */
+@media (prefers-color-scheme: dark) {
+  /* Adjust image brightness in dark mode */
+  img {
+    opacity: 0.9;
+  }
+  
+  /* Better contrast for borders */
+  .border {
+    border-color: rgba(255, 255, 255, 0.1);
+  }
+}
+
+/* Reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  /* Disable animations for users who prefer reduced motion */
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Custom utility classes for responsive design */
+.container-responsive {
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1rem;
+  padding-right: 1rem;
+}
+
+@media (min-width: 640px) {
+  .container-responsive {
+    max-width: 640px;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+}
+
+@media (min-width: 768px) {
+  .container-responsive {
+    max-width: 768px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .container-responsive {
+    max-width: 1024px;
+    padding-left: 2rem;
+    padding-right: 2rem;
+  }
+}
+
+@media (min-width: 1280px) {
+  .container-responsive {
+    max-width: 1280px;
+  }
+}
+
+/* Responsive text sizes */
+.text-responsive-xs { font-size: 0.75rem; }
+.text-responsive-sm { font-size: 0.875rem; }
+.text-responsive-base { font-size: 1rem; }
+.text-responsive-lg { font-size: 1.125rem; }
+.text-responsive-xl { font-size: 1.25rem; }
+
+@media (min-width: 640px) {
+  .text-responsive-xs { font-size: 0.875rem; }
+  .text-responsive-sm { font-size: 1rem; }
+  .text-responsive-base { font-size: 1.125rem; }
+  .text-responsive-lg { font-size: 1.25rem; }
+  .text-responsive-xl { font-size: 1.5rem; }
+}
+
+@media (min-width: 1024px) {
+  .text-responsive-xs { font-size: 1rem; }
+  .text-responsive-sm { font-size: 1.125rem; }
+  .text-responsive-base { font-size: 1.25rem; }
+  .text-responsive-lg { font-size: 1.5rem; }
+  .text-responsive-xl { font-size: 1.875rem; }
+}
+
+/* Mobile-specific improvements */
+.mobile-scroll {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+.mobile-safe-area {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Form improvements for mobile */
+.form-mobile input,
+.form-mobile select,
+.form-mobile textarea {
+  font-size: 16px; /* Prevents zoom on iOS */
+  min-height: 44px;
+}
+
+/* Table responsiveness */
+.table-responsive {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-responsive table {
+  min-width: 100%;
+  white-space: nowrap;
+}
+
+@media (max-width: 767px) {
+  .table-stack {
+    display: block;
+  }
+  
+  .table-stack thead {
+    display: none;
+  }
+  
+  .table-stack tbody,
+  .table-stack tr,
+  .table-stack td {
+    display: block;
+  }
+  
+  .table-stack tr {
+    border: 1px solid #ddd;
+    margin-bottom: 0.5rem;
+    padding: 0.5rem;
+  }
+  
+  .table-stack td {
+    text-align: right;
+    padding-left: 50%;
+    position: relative;
+  }
+  
+  .table-stack td:before {
+    content: attr(data-label);
+    position: absolute;
+    left: 0;
+    width: 45%;
+    text-align: left;
+    font-weight: bold;
+  }
+}

@@ -1,0 +1,95 @@
+# =============================================================================
+# Nomedia Production - Multi-stage Docker Build
+# =============================================================================
+
+# Build stage
+FROM node:18-alpine AS builder
+
+# Set working directory
+WORKDIR /app
+
+# Install build dependencies
+RUN apk add --no-cache python3 make g++
+
+# Copy package files
+COPY package*.json ./
+COPY tsconfig.json ./
+COPY vite.config.ts ./
+COPY vite.config.server.ts ./
+
+# Install all dependencies (including dev dependencies for build)
+RUN npm ci
+
+# Copy source code
+COPY client/ ./client/
+COPY server/ ./server/
+COPY shared/ ./shared/
+COPY public/ ./public/
+
+# Build the application
+RUN npm run build
+
+# Production stage
+FROM node:18-alpine AS production
+
+# Install system dependencies
+RUN apk add --no-cache \
+    dumb-init \
+    curl \
+    postgresql-client \
+    && rm -rf /var/cache/apk/*
+
+# Create app user for security
+RUN addgroup -g 1001 -S nodejs && \
+    adduser -S nomedia -u 1001 -G nodejs
+
+# Set working directory
+WORKDIR /app
+
+# Copy package files
+COPY package*.json ./
+
+# Install only production dependencies
+RUN npm ci --only=production && \
+    npm cache clean --force && \
+    rm -rf /tmp/*
+
+# Copy built application from builder stage
+COPY --from=builder --chown=nomedia:nodejs /app/dist ./dist
+
+# Copy necessary files
+COPY --chown=nomedia:nodejs database/ ./database/
+COPY --chown=nomedia:nodejs scripts/ ./scripts/
+
+# Create necessary directories with proper permissions
+RUN mkdir -p /app/uploads /app/logs /app/tmp && \
+    chown -R nomedia:nodejs /app/uploads /app/logs /app/tmp && \
+    chmod 755 /app/uploads /app/logs /app/tmp
+
+# Make scripts executable
+RUN chmod +x /app/scripts/*.sh
+
+# Create health check script
+RUN echo '#!/bin/sh\ncurl -f http://localhost:3000/api/health || exit 1' > /app/healthcheck.sh && \
+    chmod +x /app/healthcheck.sh && \
+    chown nomedia:nodejs /app/healthcheck.sh
+
+# Switch to non-root user
+USER nomedia
+
+# Set environment variables
+ENV NODE_ENV=production
+ENV PORT=3000
+
+# Expose port
+EXPOSE 3000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
+    CMD /app/healthcheck.sh
+
+# Use dumb-init for proper signal handling
+ENTRYPOINT ["dumb-init", "--"]
+
+# Start the application
+CMD ["node", "dist/server/node-build.mjs"]

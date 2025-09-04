@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create Custom Users</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .user { margin: 10px 0; padding: 10px; border: 1px solid #ccc; border-radius: 5px; }
+        .success { background-color: #d4edda; }
+        .error { background-color: #f8d7da; }
+        button { padding: 10px 20px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 3px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .credentials { background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0; }
+    </style>
+</head>
+<body>
+    <h1>🔧 Create Custom Users</h1>
+    
+    <div class="credentials">
+        <h3>📋 Users to Create:</h3>
+        <div><strong>1. ADMIN - Mohammed:</strong> mohammed@nomedia.ma / mohammed123</div>
+        <div><strong>2. MANAGER - Zineb:</strong> zineb@nomedia.ma / zineb123</div>
+        <div><strong>3. USER - User:</strong> karim@nomedia.ma / karim123</div>
+        <div><strong>4. GUEST - Invité:</strong> invite@nomedia.ma / invite123</div>
+    </div>
+
+    <button onclick="createAllUsers()">🚀 Create All Users</button>
+    <button onclick="clearResults()">🧹 Clear Results</button>
+
+    <div id="results"></div>
+
+    <script>
+        const API_BASE = window.location.origin + '/api';
+        
+        const users = [
+            {
+                name: 'Mohammed',
+                email: 'mohammed@nomedia.ma',
+                password: 'mohammed123',
+                role: 'admin',
+                phone: '+212 6 12 34 56 78'
+            },
+            {
+                name: 'Zineb',
+                email: 'zineb@nomedia.ma',
+                password: 'zineb123',
+                role: 'manager',
+                phone: '+212 6 23 45 67 89'
+            },
+            {
+                name: 'User',
+                email: 'karim@nomedia.ma',
+                password: 'karim123',
+                role: 'user',
+                phone: '+212 6 34 56 78 90'
+            },
+            {
+                name: 'Invité',
+                email: 'invite@nomedia.ma',
+                password: 'invite123',
+                role: 'guest',
+                phone: '+212 6 45 67 89 01'
+            }
+        ];
+
+        async function loginAsAdmin() {
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: 'admin@nomedia.ma',
+                        password: 'admin123'
+                    })
+                });
+                
+                const data = await response.json();
+                if (data.success) {
+                    localStorage.setItem('token', data.token);
+                    return data.token;
+                }
+                throw new Error('Login failed');
+            } catch (error) {
+                console.error('Login error:', error);
+                addResult('❌ Failed to login as admin', 'error');
+                return null;
+            }
+        }
+
+        async function createUser(user, token) {
+            try {
+                const response = await fetch(`${API_BASE}/users`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(user)
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    addResult(`✅ Created ${user.name} (${user.role}) - ${user.email}`, 'success');
+                } else {
+                    addResult(`❌ Failed to create ${user.name}: ${data.message}`, 'error');
+                }
+                
+                return data.success;
+            } catch (error) {
+                addResult(`❌ Error creating ${user.name}: ${error.message}`, 'error');
+                return false;
+            }
+        }
+
+        async function createAllUsers() {
+            addResult('🔧 Starting user creation process...', '');
+            
+            const token = await loginAsAdmin();
+            if (!token) return;
+            
+            addResult('✅ Logged in as admin', 'success');
+
+            for (const user of users) {
+                await createUser(user, token);
+                await new Promise(resolve => setTimeout(resolve, 500)); // Small delay
+            }
+
+            addResult('🎉 User creation process completed!', 'success');
+        }
+
+        function addResult(message, type) {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `user ${type}`;
+            div.textContent = message;
+            results.appendChild(div);
+            
+            // Scroll to bottom
+            results.scrollTop = results.scrollHeight;
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+    </script>
+</body>
+</html>
