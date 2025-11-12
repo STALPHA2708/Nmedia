@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { useDebounce } from "use-debounce";
+import { useLocation } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -86,6 +88,9 @@ import {
 import { format } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useAuth } from "@/contexts/AuthContext";
+import { useExpenses, useCreateExpense, useUpdateExpense, useDeleteExpense, useApproveExpense, useRejectExpense, useBulkDeleteExpenses } from "@/hooks/useExpenses";
+import { useProjects } from "@/hooks/useProjects";
+import { useEmployees } from "@/hooks/useEmployees";
 
 // Interfaces
 interface Expense {
@@ -175,11 +180,9 @@ const getCategoryColor = (category: string) => {
 };
 
 export default function Expenses() {
-  const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading] = useState(true);
+  const location = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch] = useDebounce(searchTerm, 300);
   const [filterProject, setFilterProject] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -189,11 +192,43 @@ export default function Expenses() {
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [deleting, setDeleting] = useState<number | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
+
+  // Cleanup effect - reset all dialogs and states when navigating away
+  useEffect(() => {
+    return () => {
+      // Close all dialogs
+      setIsCreateDialogOpen(false);
+      setIsEditDialogOpen(false);
+      setSelectedExpense(null);
+      setEditingExpense(null);
+      setExpenseToDelete(null);
+    };
+  }, [location.pathname]);
+
+  // React Query hooks
+  const { data: rawExpenses = [], isLoading: loadingExpenses } = useExpenses();
+  const { data: projects = [], isLoading: loadingProjects } = useProjects();
+  const { data: rawEmployees = [], isLoading: loadingEmployees } = useEmployees();
+  const createExpenseMutation = useCreateExpense();
+  const updateExpenseMutation = useUpdateExpense();
+  const deleteExpenseMutation = useDeleteExpense();
+  const approveExpenseMutation = useApproveExpense();
+  const rejectExpenseMutation = useRejectExpense();
+  const bulkDeleteExpensesMutation = useBulkDeleteExpenses();
+
+  const loading = loadingExpenses || loadingProjects || loadingEmployees;
+  const isSubmitting = createExpenseMutation.isPending;
+  const isUpdating = updateExpenseMutation.isPending;
+  const deleting = deleteExpenseMutation.variables as number | null;
+
+  // Transform data
+  const expenses: Expense[] = Array.isArray(rawExpenses) ? rawExpenses : [];
+  const employees = rawEmployees.map((emp: any) => ({
+    ...emp,
+    name: `${emp.first_name || ''} ${emp.last_name || ''}`.trim(),
+  }));
 
   // Form state
   const [formData, setFormData] = useState({
@@ -206,53 +241,18 @@ export default function Expenses() {
     receipt_file: "",
   });
 
-  // Load data on component mount
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        const [expensesRes, projectsRes, employeesRes] = await Promise.all([
-          apiRequest("/expenses"),
-          apiRequest("/projects"),
-          apiRequest("/employees"),
-        ]);
-
-        if (expensesRes.success)
-          setExpenses(Array.isArray(expensesRes.data) ? expensesRes.data : []);
-        if (projectsRes.success) setProjects(projectsRes.data);
-        if (employeesRes.success) {
-          const employeesWithName = employeesRes.data.map((emp: Employee) => ({
-            ...emp,
-            name: `${emp.first_name} ${emp.last_name}`,
-          }));
-          setEmployees(employeesWithName);
-        }
-      } catch (error) {
-        console.error("Error loading data:", error);
-        toast({
-          title: "Erreur",
-          description: "Impossible de charger les données",
-          variant: "destructive",
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    loadData();
-  }, []);
-
   const filteredExpenses = (Array.isArray(expenses) ? expenses : []).filter(
     (expense) => {
+      if (!expense) return false; // Safety check
+
       const matchesSearch =
-        expense.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        expense.employee_name
+        (expense.description || "").toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        (expense.employee_name || "")
           .toLowerCase()
-          .includes(searchTerm.toLowerCase()) ||
-        (expense.project_name &&
-          expense.project_name
-            .toLowerCase()
-            .includes(searchTerm.toLowerCase()));
+          .includes(debouncedSearch.toLowerCase()) ||
+        (expense.project_name || "")
+          .toLowerCase()
+          .includes(debouncedSearch.toLowerCase());
 
       const matchesProject =
         filterProject === "all" ||
@@ -336,7 +336,6 @@ export default function Expenses() {
     }
 
     try {
-      setIsSubmitting(true);
       const expenseData = {
         employee_id: formData.employee_id ? Number(formData.employee_id) : null,
         project_id: formData.project_id ? Number(formData.project_id) : null,
@@ -349,180 +348,88 @@ export default function Expenses() {
 
       console.log("Sending expense data to API:", expenseData);
 
-      const response = await apiRequest("/expenses", {
-        method: "POST",
-        body: JSON.stringify(expenseData),
+      await createExpenseMutation.mutateAsync(expenseData);
+
+      // Wait for React Query cache invalidation to complete before closing dialog
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      setIsCreateDialogOpen(false);
+      setFormData({
+        employee_id: "",
+        project_id: "",
+        category: "",
+        description: "",
+        amount: "",
+        expense_date: "",
+        receipt_file: "",
       });
-
-      console.log("Raw expense API response:", response);
-
-      if (response && response.success) {
-        toast({
-          title: "Succès",
-          description: "Dépense créée avec succès",
-        });
-        setIsCreateDialogOpen(false);
-        setFormData({
-          employee_id: "",
-          project_id: "",
-          category: "",
-          description: "",
-          amount: "",
-          expense_date: "",
-          receipt_file: "",
-        });
-        // Reload expenses
-        const expensesRes = await apiRequest("/expenses");
-        if (expensesRes.success)
-          setExpenses(Array.isArray(expensesRes.data) ? expensesRes.data : []);
-      } else {
-        throw new Error(
-          response?.message || "Échec de la création de la dépense",
-        );
-      }
     } catch (error) {
       console.error("Error creating expense:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : "Erreur lors de la création";
-      toast({
-        title: "Erreur de création",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmitting(false);
+      // Error is handled by the mutation hook
     }
   };
 
   // Handle expense deletion
   const handleDeleteExpense = async (expense: Expense) => {
-    if (!expense || deleting === expense.id) {
-      return; // Prevent multiple deletions
+    if (!expense) {
+      return;
     }
 
     try {
-      setDeleting(expense.id);
-      setIsUpdating(true);
-
       console.log(`🗑️ Deleting expense ${expense.id}...`);
+      await deleteExpenseMutation.mutateAsync(expense.id);
+      console.log(`✅ Expense ${expense.id} deleted successfully`);
 
-      const response = await apiRequest(`/expenses/${expense.id}`, {
-        method: "DELETE",
-      });
+      // Wait for React Query cache invalidation to complete before closing dialog
+      await new Promise(resolve => setTimeout(resolve, 100));
 
-      if (response.success) {
-        console.log(`✅ Expense ${expense.id} deleted successfully`);
-
-        toast({
-          title: "Succès",
-          description: "Dépense supprimée avec succès",
-        });
-
-        // Close dialog first
-        setExpenseToDelete(null);
-
-        // Reload expenses from server to ensure consistency (inlined to avoid function dependency)
-        try {
-          const expensesRes = await apiRequest("/expenses");
-          if (expensesRes.success) {
-            setExpenses(Array.isArray(expensesRes.data) ? expensesRes.data : []);
-          }
-        } catch (reloadError) {
-          console.error("Error reloading expenses:", reloadError);
-          // Continue anyway - deletion was successful
-        }
-
-      } else {
-        throw new Error(response.message || 'Erreur lors de la suppression');
-      }
+      setExpenseToDelete(null);
     } catch (error) {
       console.error("Error deleting expense:", error);
-      toast({
-        title: "Erreur",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Erreur lors de la suppression",
-        variant: "destructive",
-      });
-    } finally {
-      setDeleting(null);
-      setIsUpdating(false);
+      // Error is handled by the mutation hook
+      // Close dialog even on error to prevent stuck state
+      setExpenseToDelete(null);
     }
   };
 
   // Handle expense approval
   const handleApproveExpense = async (expense: Expense) => {
-    try {
-      const response = await apiRequest(`/expenses/${expense.id}/approve`, {
-        method: "PUT",
-      });
+    if (!expense?.id) return;
 
-      if (response.success) {
-        toast({
-          title: "Succès",
-          description: "Dépense approuvée avec succès",
-        });
-        // Update expense status
-        setExpenses(
-          (Array.isArray(expenses) ? expenses : []).map((exp) =>
-            exp.id === expense.id
-              ? { ...exp, status: "approved" as const }
-              : exp,
-          ),
-        );
-        setSelectedExpense(null);
-      } else {
-        throw new Error(response.message);
-      }
+    try {
+      await approveExpenseMutation.mutateAsync(expense.id);
+
+      // Wait for React Query cache invalidation to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      setSelectedExpense(null);
     } catch (error) {
       console.error("Error approving expense:", error);
-      toast({
-        title: "Erreur",
-        description:
-          error instanceof Error
-            ? error.message
-            : "Erreur lors de l'approbation",
-        variant: "destructive",
-      });
+      // Error is handled by the mutation hook
+      // Close/reset state even on error to prevent stuck state
+      setSelectedExpense(null);
     }
   };
 
   // Handle expense rejection
   const handleRejectExpense = async (expense: Expense) => {
+    if (!expense?.id) return;
+
     try {
-      const response = await apiRequest(`/expenses/${expense.id}/reject`, {
-        method: "PUT",
-        body: JSON.stringify({
-          rejection_reason: "Rejetée par l'administrateur",
-        }),
+      await rejectExpenseMutation.mutateAsync({
+        id: expense.id,
+        reason: "Rejetée par l'administrateur"
       });
 
-      if (response.success) {
-        toast({
-          title: "Succès",
-          description: "Dépense rejetée avec succès",
-        });
-        // Update expense status
-        setExpenses(
-          (Array.isArray(expenses) ? expenses : []).map((exp) =>
-            exp.id === expense.id
-              ? { ...exp, status: "rejected" as const }
-              : exp,
-          ),
-        );
-        setSelectedExpense(null);
-      } else {
-        throw new Error(response.message);
-      }
+      // Wait for React Query cache invalidation to complete
+      await new Promise(resolve => setTimeout(resolve, 100));
+
+      setSelectedExpense(null);
     } catch (error) {
       console.error("Error rejecting expense:", error);
-      toast({
-        title: "Erreur",
-        description:
-          error instanceof Error ? error.message : "Erreur lors du rejet",
-        variant: "destructive",
-      });
+      // Error is handled by the mutation hook
+      // Close/reset state even on error to prevent stuck state
+      setSelectedExpense(null);
     }
   };
 
@@ -552,55 +459,32 @@ export default function Expenses() {
             <Button
               variant="destructive"
               onClick={async () => {
-                // Check if we're in development environment
-                const isDevelopment = window.location.hostname === 'localhost';
-
-                if (!isDevelopment) {
-                  toast({
-                    title: "Fonctionnalité indisponible",
-                    description: "La suppression en lot n'est disponible qu'en développement local. Déployez la dernière version pour l'utiliser en production.",
-                    variant: "destructive",
-                  });
-                  return;
-                }
-
                 if (confirm(`Supprimer TOUTES les ${filteredExpenses.length} dépenses visibles? Cette action est irréversible.`)) {
                   try {
                     const expenseIds = filteredExpenses.map(exp => exp.id);
-                    const response = await apiRequest("/expenses/bulk", {
-                      method: "DELETE",
-                      body: JSON.stringify({ expenseIds }),
-                    });
+                    await bulkDeleteExpensesMutation.mutateAsync(expenseIds);
 
-                    if (response.success) {
-                      // Reload expenses (inlined to avoid function dependency)
-                      try {
-                        const expensesRes = await apiRequest("/expenses");
-                        if (expensesRes.success) {
-                          setExpenses(Array.isArray(expensesRes.data) ? expensesRes.data : []);
-                        }
-                      } catch (reloadError) {
-                        console.error("Error reloading expenses after bulk delete:", reloadError);
-                      }
-
-                      toast({
-                        title: "Succès",
-                        description: `${response.data.deletedCount} dépense(s) supprimée(s)`,
-                      });
-                    }
+                    // Wait for React Query cache invalidation to complete
+                    await new Promise(resolve => setTimeout(resolve, 100));
                   } catch (error) {
                     console.error("Bulk delete error:", error);
-                    toast({
-                      title: "Erreur",
-                      description: "Erreur lors de la suppression - Endpoint non disponible en production",
-                      variant: "destructive",
-                    });
+                    // Error is already handled by the mutation hook
                   }
                 }
               }}
+              disabled={bulkDeleteExpensesMutation.isPending}
             >
-              <Trash2 className="mr-2 h-4 w-4" />
-              Supprimer Tout {!window.location.hostname.includes('localhost') && '(Dev seulement)'}
+              {bulkDeleteExpensesMutation.isPending ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                  Suppression...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="mr-2 h-4 w-4" />
+                  Supprimer Tout
+                </>
+              )}
             </Button>
           )}
           <Button

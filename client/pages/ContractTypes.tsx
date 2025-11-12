@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import { Plus, Search, Edit, Trash2, Briefcase, Users, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +39,7 @@ import type { ContractType } from "@shared/api";
 import { useToast } from "@/hooks/use-toast";
 
 export default function ContractTypes() {
+  const location = useLocation();
   const [contractTypes, setContractTypes] = useState<ContractType[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
@@ -52,6 +54,16 @@ export default function ContractTypes() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const { toast } = useToast();
+
+  // Cleanup effect - reset all dialogs when navigating away
+  useEffect(() => {
+    return () => {
+      setDialogOpen(false);
+      setDeleteDialogOpen(false);
+      setSelectedContractType(null);
+      setFormErrors({});
+    };
+  }, [location.pathname]);
 
   useEffect(() => {
     loadContractTypes();

@@ -301,14 +301,32 @@ router.put('/:id', authenticateToken, async (req, res) => {
     let taxAmount = existingInvoice.tax_amount;
     let totalAmount = existingInvoice.total_amount;
 
-    if (invoiceData.items && invoiceData.items.length > 0) {
+    // Only update items if valid items are provided (not for status-only updates)
+    if (invoiceData.items && invoiceData.items.length > 0 && !isStatusOnlyUpdate) {
+      // Validate items before processing
+      const hasValidItems = invoiceData.items.every(item =>
+        item.description &&
+        item.unitPrice !== undefined &&
+        item.unitPrice !== null &&
+        item.quantity !== undefined &&
+        item.quantity !== null
+      );
+
+      if (!hasValidItems) {
+        console.log('❌ Invalid items detected in update request');
+        return res.status(400).json({
+          success: false,
+          message: 'Items invalides: vérifiez que tous les champs sont remplis',
+        });
+      }
+
       amount = invoiceData.items.reduce((sum, item) => sum + (item.total || 0), 0);
       taxAmount = amount * 0.2;
       totalAmount = amount + taxAmount;
 
       // Delete existing items and insert new ones
       await run('DELETE FROM invoice_items WHERE invoice_id = ?', [id]);
-      
+
       for (const item of invoiceData.items) {
         await run(`
           INSERT INTO invoice_items (invoice_id, description, unit_price, quantity, total)

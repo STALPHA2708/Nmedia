@@ -216,49 +216,55 @@ async function getRecentActivity() {
   try {
     const activities = [];
 
-    // Recent projects
-    const recentProjects = query(`
+    // Recent projects - FIXED: Added await
+    const recentProjects = await query(`
       SELECT name, status, created_at, 'project' as type
       FROM projects
       ORDER BY created_at DESC
       LIMIT 3
     `);
 
-    recentProjects.forEach(project => {
-      activities.push({
-        id: `project-${project.name}`,
-        type: 'project',
-        title: `Nouveau projet: ${project.name}`,
-        description: `Statut: ${project.status}`,
-        timestamp: project.created_at,
-        icon: 'folder'
+    // Ensure it's an array before forEach
+    if (Array.isArray(recentProjects)) {
+      recentProjects.forEach(project => {
+        activities.push({
+          id: `project-${project.name}`,
+          type: 'project',
+          title: `Nouveau projet: ${project.name}`,
+          description: `Statut: ${project.status}`,
+          timestamp: project.created_at,
+          icon: 'folder'
+        });
       });
-    });
+    }
 
-    // Recent users
-    const recentUsers = query(`
+    // Recent users - FIXED: Added await
+    const recentUsers = await query(`
       SELECT name, role, created_at, 'user' as type
       FROM users
       ORDER BY created_at DESC
       LIMIT 2
     `);
 
-    recentUsers.forEach(user => {
-      activities.push({
-        id: `user-${user.name}`,
-        type: 'user',
-        title: `Nouvel utilisateur: ${user.name}`,
-        description: `Rôle: ${user.role}`,
-        timestamp: user.created_at,
-        icon: 'user'
+    // Ensure it's an array before forEach
+    if (Array.isArray(recentUsers)) {
+      recentUsers.forEach(user => {
+        activities.push({
+          id: `user-${user.name}`,
+          type: 'user',
+          title: `Nouvel utilisateur: ${user.name}`,
+          description: `Rôle: ${user.role}`,
+          timestamp: user.created_at,
+          icon: 'user'
+        });
       });
-    });
+    }
 
     // Sort by timestamp and return latest 5
     return activities
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, 5);
-      
+
   } catch (error) {
     console.error('Error fetching recent activity:', error);
     return [];

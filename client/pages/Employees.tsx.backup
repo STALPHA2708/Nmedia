@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from "react";
-import { useDebounce } from "use-debounce";
-import { useLocation } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -66,9 +64,6 @@ import {
 } from "@/lib/api";
 import type { Employee, Department, ContractType } from "@shared/api";
 import { useToast } from "@/hooks/use-toast";
-import { useEmployees, useCreateEmployee, useUpdateEmployee, useDeleteEmployee } from "@/hooks/useEmployees";
-import { useDepartments } from "@/hooks/useDepartments";
-import { useContractTypes } from "@/hooks/useContractTypes";
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -103,9 +98,7 @@ const getInitials = (firstName: string, lastName: string) => {
 };
 
 export default function Employees() {
-  const location = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
-  const [debouncedSearch] = useDebounce(searchTerm, 300); // Debounced search for performance
   const [filterDepartment, setFilterDepartment] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
@@ -114,32 +107,15 @@ export default function Employees() {
   );
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [contractTypes, setContractTypes] = useState<ContractType[]>([]);
   const [currentTab, setCurrentTab] = useState("personal");
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [updating, setUpdating] = useState(false);
+  const [deleting, setDeleting] = useState<number | null>(null);
   const { toast } = useToast();
-
-  // Cleanup effect - reset all dialogs and states when navigating away
-  useEffect(() => {
-    return () => {
-      setIsCreateDialogOpen(false);
-      setIsEditDialogOpen(false);
-      setSelectedEmployee(null);
-      setEditingEmployee(null);
-      setCurrentTab("personal");
-    };
-  }, [location.pathname]);
-
-  // React Query hooks - automatic caching and refetching
-  const { data: employees = [], isLoading: employeesLoading } = useEmployees();
-  const { data: departments = [], isLoading: departmentsLoading } = useDepartments();
-  const { data: contractTypes = [] } = useContractTypes();
-  const createEmployeeMutation = useCreateEmployee();
-  const updateEmployeeMutation = useUpdateEmployee();
-  const deleteEmployeeMutation = useDeleteEmployee();
-
-  const loading = employeesLoading || departmentsLoading;
-  const creating = createEmployeeMutation.isPending;
-  const updating = updateEmployeeMutation.isPending;
-  const deleting = deleteEmployeeMutation.isPending ? (deleteEmployeeMutation.variables as number) : null;
 
   // Form state for new employee
   const [newEmployee, setNewEmployee] = useState({
@@ -160,10 +136,73 @@ export default function Employees() {
 
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
+  // Load data on component mount
+  useEffect(() => {
+    loadEmployees();
+    loadDepartments();
+    loadContractTypes();
+  }, []);
+
   // Debug dialog state
   useEffect(() => {
     console.log("🔘 Dialog state changed:", isCreateDialogOpen);
   }, [isCreateDialogOpen]);
+
+  const loadEmployees = async () => {
+    try {
+      setLoading(true);
+      const response = await employeeApi.getAll();
+      const employeeData = response.data || [];
+      // Ensure we always have an array
+      setEmployees(Array.isArray(employeeData) ? employeeData : []);
+    } catch (error) {
+      toast({
+        title: "Erreur",
+        description: handleApiError(error),
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadDepartments = async () => {
+    try {
+      console.log("🏢 Loading departments...");
+      const response = await departmentApi.getAll();
+      console.log("🏢 Departments API response:", response);
+      const deptData = response.data || [];
+      console.log("🏢 Departments data:", deptData);
+      console.log("🏢 Individual departments:");
+      deptData.forEach((dept, index) => {
+        console.log(`   ${index + 1}. ID: ${dept.id}, Name: "${dept.name}", Description: "${dept.description}"`);
+      });
+      setDepartments(deptData);
+      console.log("🏢 Departments state updated with", deptData.length, "departments");
+    } catch (error) {
+      console.error("🏢 Error loading departments:", error);
+      console.error("🏢 Error details:", error.message);
+    }
+  };
+
+  const loadContractTypes = async () => {
+    try {
+      console.log("📋 Loading contract types...");
+      const response = await contractTypeApi.getAll();
+      console.log("📋 Contract types API response:", response);
+      const contractData = response.data || [];
+      console.log("📋 Contract types data:", contractData);
+      console.log("📋 Individual contract types:");
+      contractData.forEach((type, index) => {
+        console.log(`   ${index + 1}. ID: ${type.id}, Name: "${type.name}", Description: "${type.description}", Permanent: ${type.is_permanent}`);
+      });
+      setContractTypes(contractData);
+      console.log("📋 Contract types state updated with", contractData.length, "types");
+    } catch (error) {
+      console.error("📋 Error loading contract types:", error);
+      console.error("📋 Error details:", error.message);
+    }
+  };
 
   // Validation function
   const validateForm = () => {
@@ -276,8 +315,15 @@ export default function Employees() {
       };
 
       console.log("Creating employee with data:", employeeData);
-      await createEmployeeMutation.mutateAsync(employeeData);
+      const result = await employeeApi.create(employeeData);
+      console.log("Employee created successfully:", result);
+      await loadEmployees();
       console.log("Employee creation completed successfully");
+
+      toast({
+        title: "✅ Employé créé avec succès",
+        description: `${employeeData.firstName} ${employeeData.lastName} a été ajouté à l'équipe`,
+      });
 
       // Reset form
       setNewEmployee({
@@ -335,6 +381,8 @@ export default function Employees() {
         description: errorMessage,
         variant: "destructive",
       });
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -367,6 +415,8 @@ export default function Employees() {
     }
 
     try {
+      setUpdating(true);
+
       const departmentId = parseInt(newEmployee.department);
 
       const employeeData = {
@@ -386,10 +436,8 @@ export default function Employees() {
         status: editingEmployee.status, // Keep existing status
       };
 
-      await updateEmployeeMutation.mutateAsync({
-        id: editingEmployee.id,
-        data: employeeData
-      });
+      await employeeApi.update(editingEmployee.id, employeeData);
+      await loadEmployees();
 
       // Reset form
       setNewEmployee({
@@ -411,20 +459,42 @@ export default function Employees() {
       setCurrentTab("personal");
       setIsEditDialogOpen(false);
       setEditingEmployee(null);
+
+      toast({
+        title: "Succès",
+        description: "Employé mis à jour avec succès",
+      });
     } catch (error) {
-      console.error("Employee update error:", error);
-      // Error is handled by the mutation hook
+      toast({
+        title: "Erreur",
+        description: handleApiError(error),
+        variant: "destructive",
+      });
+    } finally {
+      setUpdating(false);
     }
   };
 
   // Delete employee function
   const handleDeleteEmployee = async (employeeId: number) => {
     try {
-      await deleteEmployeeMutation.mutateAsync(employeeId);
+      setDeleting(employeeId);
+      await employeeApi.delete(employeeId);
+      await loadEmployees();
       setSelectedEmployee(null);
+
+      toast({
+        title: "Succès",
+        description: "Employé supprimé avec succ��s",
+      });
     } catch (error) {
-      console.error("Employee delete error:", error);
-      // Error is handled by the mutation hook
+      toast({
+        title: "Erreur",
+        description: handleApiError(error),
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -486,16 +556,16 @@ export default function Employees() {
       const matchesSearch =
         (employee.first_name || "")
           .toLowerCase()
-          .includes(debouncedSearch.toLowerCase()) ||
+          .includes(searchTerm.toLowerCase()) ||
         (employee.last_name || "")
           .toLowerCase()
-          .includes(debouncedSearch.toLowerCase()) ||
+          .includes(searchTerm.toLowerCase()) ||
         (employee.email || "")
           .toLowerCase()
-          .includes(debouncedSearch.toLowerCase()) ||
+          .includes(searchTerm.toLowerCase()) ||
         (employee.position || "")
           .toLowerCase()
-          .includes(debouncedSearch.toLowerCase());
+          .includes(searchTerm.toLowerCase());
 
       const matchesDepartment =
         filterDepartment === "all" ||

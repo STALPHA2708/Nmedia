@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useMemo, useCallback, useEffect } from "react";
+import { useDebounce } from "use-debounce";
+import { useLocation } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -60,10 +62,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { invoiceApi, formatCurrency, formatDate, handleApiError } from "@/lib/api";
+import { formatCurrency, formatDate } from "@/lib/api";
 import type { Invoice } from "@shared/api";
 import { useToast } from "@/hooks/use-toast";
-import { useDebounce } from "@/hooks/useDebounce";
+import { useInvoices, useCreateInvoice, useUpdateInvoice, useDeleteInvoice } from "@/hooks/useInvoices";
 import { useVirtualization } from "@/hooks/useVirtualization";
 
 const getStatusColor = (status: string) => {
@@ -114,101 +116,101 @@ const getStatusIcon = (status: string) => {
 };
 
 export default function InvoicesUpdated() {
+  const location = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch] = useDebounce(searchTerm, 300);
   const [filterStatus, setFilterStatus] = useState("all");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [selectedInvoice, setSelectedInvoice] = useState<Invoice | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [deleting, setDeleting] = useState<number | null>(null);
   const [statusChangeInvoice, setStatusChangeInvoice] = useState<Invoice | null>(null);
+  const [isStatusDialogOpen, setIsStatusDialogOpen] = useState(false);
   const [newStatus, setNewStatus] = useState<string>("");
-  const [updatingStatus, setUpdatingStatus] = useState(false);
   const { toast } = useToast();
 
-  // Safe dialog close to prevent race conditions
-  const handleCloseInvoiceDialog = useCallback(() => {
-    setTimeout(() => {
+  // Cleanup effect - reset all dialogs when navigating away
+  useEffect(() => {
+    return () => {
+      setIsCreateDialogOpen(false);
       setSelectedInvoice(null);
-    }, 0);
+      setStatusChangeInvoice(null);
+      setIsStatusDialogOpen(false);
+      setNewStatus("");
+    };
+  }, [location.pathname]);
+
+  // React Query hooks
+  const { data: invoices = [], isLoading: loading } = useInvoices();
+  const createInvoiceMutation = useCreateInvoice();
+  const updateInvoiceMutation = useUpdateInvoice();
+  const deleteInvoiceMutation = useDeleteInvoice();
+
+  const creating = createInvoiceMutation.isPending;
+  const deleting = deleteInvoiceMutation.variables as number | null;
+
+  // Safe dialog close
+  const handleCloseInvoiceDialog = useCallback(() => {
+    setSelectedInvoice(null);
   }, []);
 
   const handleCloseStatusDialog = useCallback(() => {
+    setIsStatusDialogOpen(false);
+    // Clear data after a brief delay to allow dialog animation
     setTimeout(() => {
       setStatusChangeInvoice(null);
-    }, 0);
+      setNewStatus("");
+    }, 150);
   }, []);
 
-  useEffect(() => {
-    loadInvoices();
-  }, []);
+  const handleCreateInvoice = (formData: any) => {
+    console.log('Creating invoice with data:', formData);
 
-  const loadInvoices = async () => {
-    try {
-      setLoading(true);
-      const response = await invoiceApi.getAll();
-      setInvoices(response.data || []);
-    } catch (error) {
-      console.error("Error loading invoices:", error);
+    // Validate required fields
+    if (!formData.client || !formData.project || !formData.items || formData.items.length === 0) {
       toast({
-        title: "Erreur",
-        description: handleApiError(error),
+        title: "Validation échouée",
+        description: "Veuillez remplir tous les champs obligatoires",
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
+      return;
     }
+
+    // Transform to match CreateInvoiceRequest type (mixed case)
+    const invoiceData = {
+      invoiceNumber: formData.invoiceNumber,
+      client: formData.client,
+      clientIce: formData.clientIce,
+      project: formData.project,
+      issueDate: formData.issueDate,
+      dueDate: formData.dueDate,
+      status: formData.status || "draft",
+      amount: formData.amount || 0,
+      taxAmount: formData.taxAmount || 0,
+      totalAmount: formData.totalAmount || 0,
+      items: formData.items.map((item: any) => ({
+        description: item.description,
+        unitPrice: item.unitPrice,
+        quantity: item.quantity,
+        total: item.total
+      })),
+      teamMembers: formData.teamMembers || [],
+      notes: formData.notes || "",
+    };
+
+    console.log('Transformed invoice data:', invoiceData);
+
+    // Close dialog IMMEDIATELY
+    setIsCreateDialogOpen(false);
+
+    // Fire mutation in background
+    createInvoiceMutation.mutate(invoiceData);
   };
 
-  const handleCreateInvoice = async (formData: any) => {
-    try {
-      setCreating(true);
-      console.log('Creating invoice with data:', formData);
-      
-      const response = await invoiceApi.create(formData);
-      console.log('Invoice creation response:', response);
-      
-      if (response.success) {
-        await loadInvoices();
-        setIsCreateDialogOpen(false);
-        toast({
-          title: "Succès",
-          description: "Facture créée avec succès",
-        });
-      }
-    } catch (error) {
-      console.error("Error creating invoice:", error);
-      toast({
-        title: "Erreur",
-        description: handleApiError(error),
-        variant: "destructive",
-      });
-    } finally {
-      setCreating(false);
-    }
-  };
+  const handleDeleteInvoice = (invoiceId: number) => {
+    // Close dialog IMMEDIATELY
+    setSelectedInvoice(null);
 
-  const handleDeleteInvoice = async (invoiceId: number) => {
-    try {
-      setDeleting(invoiceId);
-      await invoiceApi.delete(invoiceId);
-      await loadInvoices();
-      setSelectedInvoice(null);
-      
-      toast({
-        title: "Succès",
-        description: "Facture supprimée avec succès",
-      });
-    } catch (error) {
-      toast({
-        title: "Erreur",
-        description: handleApiError(error),
-        variant: "destructive",
-      });
-    } finally {
-      setDeleting(null);
-    }
+    // Fire deletion in background
+    deleteInvoiceMutation.mutate(invoiceId);
   };
 
   const handlePrintInvoice = (invoice: Invoice) => {
@@ -242,53 +244,63 @@ export default function InvoicesUpdated() {
   const handleChangeStatus = useCallback((invoice: Invoice) => {
     setStatusChangeInvoice(invoice);
     setNewStatus(invoice.status);
+    setIsStatusDialogOpen(true);
   }, []);
 
-  const handleUpdateStatus = useCallback(async () => {
-    if (!statusChangeInvoice || !newStatus) return;
-
-    try {
-      setUpdatingStatus(true);
-
-      const response = await invoiceApi.update(statusChangeInvoice.id, {
-        ...statusChangeInvoice,
-        status: newStatus as any,
-      });
-
-      if (response.success) {
-        await loadInvoices();
-        handleCloseStatusDialog();
-        toast({
-          title: "Statut mis à jour",
-          description: `Le statut de la facture a été changé vers "${formatStatus(newStatus)}".`,
-        });
-      }
-    } catch (error) {
-      console.error("Error updating status:", error);
+  const handleUpdateStatus = useCallback(() => {
+    if (!statusChangeInvoice || !newStatus) {
       toast({
         title: "Erreur",
-        description: handleApiError(error),
+        description: "Veuillez sélectionner un statut",
         variant: "destructive",
       });
-    } finally {
-      setUpdatingStatus(false);
+      return;
     }
-  }, [statusChangeInvoice, newStatus, toast]);
 
-  // Debounce search term to avoid excessive filtering
-  const debouncedSearchTerm = useDebounce(searchTerm, 300);
+    // Don't update if status hasn't changed
+    if (newStatus === statusChangeInvoice.status) {
+      handleCloseStatusDialog();
+      return;
+    }
+
+    // Store values before closing
+    const invoiceId = statusChangeInvoice.id;
+    const statusToUpdate = newStatus;
+
+    // Close dialog IMMEDIATELY
+    setIsStatusDialogOpen(false);
+
+    // Fire mutation in background - don't wait for it
+    updateInvoiceMutation.mutate({
+      id: invoiceId,
+      data: { status: statusToUpdate as any }
+    }, {
+      onSuccess: () => {
+        toast({
+          title: "Statut mis à jour",
+          description: `Le statut de la facture a été changé vers "${formatStatus(statusToUpdate)}".`,
+        });
+      }
+    });
+
+    // Clear state after dialog animation
+    setTimeout(() => {
+      setStatusChangeInvoice(null);
+      setNewStatus("");
+    }, 150);
+  }, [statusChangeInvoice, newStatus, toast, updateInvoiceMutation, formatStatus]);
 
   // Memoize filtered invoices to prevent unnecessary recalculations
   const filteredInvoices = useMemo(() => {
     return invoices.filter((invoice) => {
       const matchesSearch =
-        invoice.invoice_number?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-        invoice.client?.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-        invoice.project?.toLowerCase().includes(debouncedSearchTerm.toLowerCase());
+        invoice.invoice_number?.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        invoice.client?.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        invoice.project?.toLowerCase().includes(debouncedSearch.toLowerCase());
       const matchesStatus = filterStatus === "all" || invoice.status === filterStatus;
       return matchesSearch && matchesStatus;
     });
-  }, [invoices, debouncedSearchTerm, filterStatus]);
+  }, [invoices, debouncedSearch, filterStatus]);
 
   // Use virtualization for large lists
   const {
@@ -419,13 +431,15 @@ export default function InvoicesUpdated() {
 
       {/* Invoices Grid */}
       <div className="grid gap-6 sm:grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3">
-        {displayedInvoices.map((invoice) => (
+        {displayedInvoices.map((invoice) => {
+          if (!invoice || !invoice.id) return null;
+          return (
           <Card key={invoice.id} className="hover:shadow-md transition-shadow">
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
-                  <CardTitle className="text-lg">{invoice.invoice_number}</CardTitle>
-                  <CardDescription>{invoice.client}</CardDescription>
+                  <CardTitle className="text-lg">{invoice.invoice_number || 'N/A'}</CardTitle>
+                  <CardDescription>{invoice.client || 'N/A'}</CardDescription>
                 </div>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
@@ -470,9 +484,9 @@ export default function InvoicesUpdated() {
                 </DropdownMenu>
               </div>
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className={getStatusColor(invoice.status)}>
-                  {getStatusIcon(invoice.status)}
-                  <span className="ml-1">{formatStatus(invoice.status)}</span>
+                <Badge variant="outline" className={getStatusColor(invoice.status || 'draft')}>
+                  {getStatusIcon(invoice.status || 'draft')}
+                  <span className="ml-1">{formatStatus(invoice.status || 'draft')}</span>
                 </Badge>
               </div>
             </CardHeader>
@@ -480,26 +494,26 @@ export default function InvoicesUpdated() {
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Projet:</span>
-                  <span className="font-medium truncate ml-2">{invoice.project}</span>
+                  <span className="font-medium truncate ml-2">{invoice.project || 'N/A'}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>Montant HT:</span>
-                  <span className="font-medium">{formatCurrency(invoice.amount)}</span>
+                  <span className="font-medium">{formatCurrency(invoice.amount || 0)}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span>Total TTC:</span>
-                  <span className="font-bold">{formatCurrency(invoice.total_amount)}</span>
+                  <span className="font-bold">{formatCurrency(invoice.total_amount || 0)}</span>
                 </div>
               </div>
               
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <span className="text-muted-foreground">Émission:</span>
-                  <div>{formatDate(invoice.issue_date)}</div>
+                  <div>{invoice.issue_date ? formatDate(invoice.issue_date) : 'N/A'}</div>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Échéance:</span>
-                  <div>{formatDate(invoice.due_date)}</div>
+                  <div>{invoice.due_date ? formatDate(invoice.due_date) : 'N/A'}</div>
                 </div>
               </div>
 
@@ -513,7 +527,8 @@ export default function InvoicesUpdated() {
               </Button>
             </CardContent>
           </Card>
-        ))}
+          );
+        })}
       </div>
 
       {totalItems === 0 && (
@@ -707,11 +722,14 @@ export default function InvoicesUpdated() {
       )}
 
       {/* Status Change Dialog */}
-      <Dialog open={!!statusChangeInvoice} onOpenChange={(open) => {
-        if (!open) {
-          handleCloseStatusDialog();
-        }
-      }}>
+      <Dialog
+        open={isStatusDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            handleCloseStatusDialog();
+          }
+        }}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Changer le statut de la facture</DialogTitle>
@@ -741,22 +759,14 @@ export default function InvoicesUpdated() {
               <Button
                 variant="outline"
                 onClick={handleCloseStatusDialog}
-                disabled={updatingStatus}
               >
                 Annuler
               </Button>
               <Button
                 onClick={handleUpdateStatus}
-                disabled={updatingStatus || newStatus === statusChangeInvoice?.status}
+                disabled={newStatus === statusChangeInvoice?.status}
               >
-                {updatingStatus ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Mise à jour...
-                  </>
-                ) : (
-                  "Changer le statut"
-                )}
+                Changer le statut
               </Button>
             </div>
           </div>

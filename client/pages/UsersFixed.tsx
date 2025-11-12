@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -308,6 +309,7 @@ const CreateUserForm = ({
 };
 
 export default function UsersFixed() {
+  const location = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
   const [filterRole, setFilterRole] = useState("all");
   const [filterStatus, setFilterStatus] = useState("all");
@@ -317,6 +319,16 @@ export default function UsersFixed() {
   const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<number | null>(null);
   const { toast } = useToast();
+
+  // Cleanup effect - reset all dialogs when navigating away
+  useEffect(() => {
+    return () => {
+      setIsCreateDialogOpen(false);
+      setSearchTerm("");
+      setFilterRole("all");
+      setFilterStatus("all");
+    };
+  }, [location.pathname]);
 
   useEffect(() => {
     loadUsers();
