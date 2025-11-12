@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from "react";
+import { useDebounce } from "use-debounce";
+import { useLocation } from "react-router-dom";
 import {
   Card,
   CardContent,
@@ -51,15 +53,14 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { ProjectForm } from "@/components/ProjectForm";
 import {
-  projectApi,
-  employeeApi,
   handleApiError,
   formatCurrency,
   formatDate,
-  apiRequest,
 } from "@/lib/api";
 import type { Project, Employee } from "@shared/api";
 import { useToast } from "@/hooks/use-toast";
+import { useProjects, useCreateProject, useUpdateProject, useDeleteProject } from "@/hooks/useProjects";
+import { useEmployees } from "@/hooks/useEmployees";
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -118,66 +119,39 @@ const formatPriority = (priority: string) => {
 };
 
 export default function Projects() {
+  const location = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
+  const [debouncedSearch] = useDebounce(searchTerm, 300);
   const [filterStatus, setFilterStatus] = useState("all");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [loadingEmployees, setLoadingEmployees] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [updating, setUpdating] = useState(false);
-  const [deleting, setDeleting] = useState<number | null>(null);
   const { toast } = useToast();
 
-  // Load data on component mount
+  // Cleanup effect - reset all dialogs when navigating away
   useEffect(() => {
-    loadProjects();
-    loadEmployees();
-  }, []);
+    return () => {
+      setIsCreateDialogOpen(false);
+      setIsEditDialogOpen(false);
+      setSelectedProject(null);
+      setEditingProject(null);
+    };
+  }, [location.pathname]);
 
-  const loadProjects = async () => {
-    try {
-      setLoading(true);
-      const response = await projectApi.getAll();
-      console.log("Projects API response:", response);
-      console.log("Projects data:", response.data);
-      setProjects(response.data || []);
-    } catch (error) {
-      toast({
-        title: "Erreur",
-        description: handleApiError(error),
-        variant: "destructive",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  // React Query hooks - automatic caching and refetching
+  const { data: projects = [], isLoading: loading, error: projectsError } = useProjects();
+  const { data: employees = [], isLoading: loadingEmployees } = useEmployees();
+  const createProjectMutation = useCreateProject();
+  const updateProjectMutation = useUpdateProject();
+  const deleteProjectMutation = useDeleteProject();
 
-  const loadEmployees = async () => {
-    try {
-      setLoadingEmployees(true);
-      const response = await employeeApi.getAll();
-      console.log("Employee API response:", response);
-      console.log("Employee API response.data:", response.data);
-      console.log("Employee API response.data type:", typeof response.data);
-      console.log("Employee API response.data length:", response.data?.length);
-      setEmployees(response.data || []);
-      console.log("Loaded employees into state:", response.data || []);
-      console.log("State employees count:", (response.data || []).length);
-    } catch (error) {
-      console.error("Error loading employees:", error);
-    } finally {
-      setLoadingEmployees(false);
-    }
-  };
+  const creating = createProjectMutation.isPending;
+  const updating = updateProjectMutation.isPending;
+  const deleting = deleteProjectMutation.variables as number | null;
 
   const handleCreateProject = async (formData: any) => {
     try {
-      setCreating(true);
       console.log("Creating project with form data:", formData);
 
       // Basic validation
@@ -234,34 +208,11 @@ export default function Projects() {
 
       console.log("Sending project data to API:", projectData);
 
-      const response = await projectApi.create(projectData);
-
-      console.log("Raw API response:", response);
-
-      if (response && response.success) {
-        console.log("Project created successfully:", response.data);
-        await loadProjects();
-        setIsCreateDialogOpen(false);
-
-        toast({
-          title: "Succès",
-          description: "Projet créé avec succès",
-        });
-      } else {
-        console.error("Project creation failed:", response);
-        throw new Error(response?.message || "Échec de la création du projet");
-      }
+      await createProjectMutation.mutateAsync(projectData);
+      setIsCreateDialogOpen(false);
     } catch (error) {
       console.error("Project creation error:", error);
-      const errorMessage =
-        error instanceof Error ? error.message : "Erreur inconnue";
-      toast({
-        title: "Erreur de création",
-        description: errorMessage,
-        variant: "destructive",
-      });
-    } finally {
-      setCreating(false);
+      // Error is handled by the mutation hook with toast
     }
   };
 
@@ -287,11 +238,9 @@ export default function Projects() {
     }
 
     try {
-      setUpdating(true);
-
       const projectData = {
         name: formData.name,
-        client: formData.client, // Update endpoint expects 'client'
+        client: formData.client,
         description: formData.description,
         budget: formData.budget,
         startDate: formData.startDate,
@@ -319,45 +268,22 @@ export default function Projects() {
         spent: formData.spent || editingProject.spent,
       };
 
-      await projectApi.update(projectId, projectData);
-      await loadProjects();
+      await updateProjectMutation.mutateAsync({ id: projectId, data: projectData });
       setIsEditDialogOpen(false);
       setEditingProject(null);
-
-      toast({
-        title: "Succès",
-        description: "Projet mis à jour avec succès",
-      });
     } catch (error) {
-      toast({
-        title: "Erreur",
-        description: handleApiError(error),
-        variant: "destructive",
-      });
-    } finally {
-      setUpdating(false);
+      console.error("Project update error:", error);
+      // Error is handled by the mutation hook with toast
     }
   };
 
   const handleDeleteProject = async (projectId: number) => {
     try {
-      setDeleting(projectId);
-      await projectApi.delete(projectId);
-      await loadProjects();
+      await deleteProjectMutation.mutateAsync(projectId);
       setSelectedProject(null);
-
-      toast({
-        title: "Succès",
-        description: "Projet supprimé avec succès",
-      });
     } catch (error) {
-      toast({
-        title: "Erreur",
-        description: handleApiError(error),
-        variant: "destructive",
-      });
-    } finally {
-      setDeleting(null);
+      console.error("Project delete error:", error);
+      // Error is handled by the mutation hook with toast
     }
   };
 
@@ -369,10 +295,10 @@ export default function Projects() {
 
   const filteredProjects = projects.filter((project) => {
     const matchesSearch =
-      (project.name || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (project.name || "").toLowerCase().includes(debouncedSearch.toLowerCase()) ||
       (project.client_name || "")
         .toLowerCase()
-        .includes(searchTerm.toLowerCase());
+        .includes(debouncedSearch.toLowerCase());
     const matchesStatus =
       filterStatus === "all" || project.status === filterStatus;
     return matchesSearch && matchesStatus;

@@ -1,0 +1,23 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx prisma:*)",
+      "Bash(docker --version:*)",
+      "Bash(docker run:*)",
+      "Bash(npm run dev:*)",
+      "Bash(node -e:*)",
+      "Bash(git reset:*)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(timeout:*)",
+      "Bash(taskkill:*)",
+      "Bash(cmd //c taskkill //PID 35504 //F)",
+      "Bash(server/index.ts)",
+      "Bash(git checkout:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

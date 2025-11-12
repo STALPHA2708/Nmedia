@@ -25,3 +25,8 @@ dist-ssr
 
 .config/
 !.env
+.env.render
+.env.production
+.env.railway
+
+/generated/prisma

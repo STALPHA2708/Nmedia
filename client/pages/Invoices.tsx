@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Card,
   CardContent,
@@ -53,6 +53,7 @@ import {
   CheckCircle,
   Clock,
   AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -60,92 +61,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { invoiceApi, handleApiError } from "@/lib/api";
+import { useToast } from "@/hooks/use-toast";
+import type { Invoice } from "@shared/api";
 
-// Mock data
-const invoices = [
-  {
-    id: 1,
-    invoiceNumber: "NOM-2024-001",
-    client: "STE NEW GENERATION PICTURES",
-    clientIce: "000515592000068",
-    project: "DOUBLAGE MINI SERIE ATTAR",
-    amount: 60000.0,
-    taxAmount: 10000.0,
-    totalAmount: 70000.0,
-    issueDate: "2024-01-06",
-    dueDate: "2024-02-06",
-    status: "paid",
-    items: [
-      {
-        description:
-          "DOUBLAGE MINI SERIE ATTAR - Version originale : tachelhit - Versions doublées : Tarifit/ tamazight",
-        unitPrice: 25000.0,
-        quantity: 2,
-        total: 50000.0,
-      },
-    ],
-  },
-  {
-    id: 2,
-    invoiceNumber: "NOM-2024-002",
-    client: "TechCorp Solutions",
-    clientIce: "000515592000069",
-    project: "Documentaire Corporate",
-    amount: 450000.0,
-    taxAmount: 90000.0,
-    totalAmount: 540000.0,
-    issueDate: "2024-01-31",
-    dueDate: "2024-03-01",
-    status: "pending",
-    items: [
-      {
-        description: "Production documentaire corporate 15 minutes",
-        unitPrice: 300000.0,
-        quantity: 1,
-        total: 300000.0,
-      },
-      {
-        description: "Post-production et montage",
-        unitPrice: 150000.0,
-        quantity: 1,
-        total: 150000.0,
-      },
-    ],
-  },
-  {
-    id: 3,
-    invoiceNumber: "NOM-2024-003",
-    client: "Maison Deluxe",
-    clientIce: "000515592000070",
-    project: "Spot TV - Luxury Brand",
-    amount: 850000.0,
-    taxAmount: 170000.0,
-    totalAmount: 1020000.0,
-    issueDate: "2024-02-15",
-    dueDate: "2024-03-15",
-    status: "overdue",
-    items: [
-      {
-        description: "Production spot TV 30 secondes",
-        unitPrice: 500000.0,
-        quantity: 1,
-        total: 500000.0,
-      },
-      {
-        description: "Location matériel professionnel",
-        unitPrice: 200000.0,
-        quantity: 1,
-        total: 200000.0,
-      },
-      {
-        description: "Post-production et étalonnage",
-        unitPrice: 150000.0,
-        quantity: 1,
-        total: 150000.0,
-      },
-    ],
-  },
-];
+// Removed mock data - now using real API
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -524,16 +444,188 @@ export default function Invoices() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [selectedInvoice, setSelectedInvoice] = useState<any>(null);
   const [viewMode, setViewMode] = useState<"customer" | "admin">("customer");
-  const [invoicesList, setInvoicesList] = useState(invoices);
+  const [invoicesList, setInvoicesList] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState<number | null>(null);
+  const { toast } = useToast();
 
-  const handleCreateInvoice = (formData: any) => {
-    const newInvoice = {
-      ...formData,
-      id: Date.now(),
-      status: "draft",
-    };
-    setInvoicesList([newInvoice, ...invoicesList]);
-    setIsCreateDialogOpen(false);
+  // Load invoices on mount
+  useEffect(() => {
+    loadInvoices();
+  }, []);
+
+  const loadInvoices = async () => {
+    try {
+      setLoading(true);
+      const response = await invoiceApi.getAll();
+      console.log("Invoices loaded:", response.data);
+      setInvoicesList(Array.isArray(response.data) ? response.data : []);
+    } catch (error) {
+      console.error("Error loading invoices:", error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les factures",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateInvoice = async (formData: any) => {
+    try {
+      setCreating(true);
+      console.log("Creating invoice with form data:", formData);
+
+      // Validate required fields
+      if (!formData.client || !formData.project || !formData.invoiceNumber) {
+        throw new Error("Veuillez remplir tous les champs obligatoires");
+      }
+
+      if (!formData.items || formData.items.length === 0) {
+        throw new Error("Veuillez ajouter au moins un article");
+      }
+
+      // Transform form data to API format
+      const invoiceData = {
+        invoiceNumber: formData.invoiceNumber,
+        client: formData.client,
+        clientIce: formData.clientIce || "",
+        project: formData.project,
+        amount: formData.amount || 0,
+        taxAmount: formData.taxAmount || 0,
+        totalAmount: formData.totalAmount || 0,
+        issueDate: formData.issueDate,
+        dueDate: formData.dueDate,
+        status: formData.status || "draft",
+        items: formData.items || [],
+        teamMembers: formData.teamMembers || [],
+        notes: formData.notes || "",
+      };
+
+      console.log("Sending invoice data to API:", invoiceData);
+
+      const response = await invoiceApi.create(invoiceData);
+
+      if (response && response.success) {
+        console.log("Invoice created successfully:", response.data);
+        await loadInvoices();
+        setIsCreateDialogOpen(false);
+
+        toast({
+          title: "Succès",
+          description: "Facture créée avec succès",
+        });
+      } else {
+        throw new Error(response?.message || "Échec de la création de la facture");
+      }
+    } catch (error) {
+      console.error("Invoice creation error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Erreur inconnue";
+      toast({
+        title: "Erreur de création",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleDeleteInvoice = async (invoiceId: number) => {
+    if (!invoiceId) return;
+
+    try {
+      setDeleting(invoiceId);
+      console.log(`Deleting invoice ${invoiceId}...`);
+
+      await invoiceApi.delete(invoiceId);
+
+      toast({
+        title: "Succès",
+        description: "Facture supprimée avec succès",
+      });
+
+      // Reload invoices to get complete updated data
+      try {
+        const invoicesRes = await invoiceApi.getAll();
+        if (invoicesRes.success) {
+          setInvoicesList(Array.isArray(invoicesRes.data) ? invoicesRes.data : []);
+        }
+      } catch (reloadError) {
+        console.error("Error reloading invoices:", reloadError);
+      }
+
+      setSelectedInvoice(null);
+    } catch (error) {
+      console.error("Delete invoice error:", error);
+      toast({
+        title: "Erreur",
+        description: handleApiError(error),
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(null);
+    }
+  };
+
+  const handleStatusChange = async (invoiceId: number, newStatus: string) => {
+    if (!invoiceId) {
+      toast({
+        title: "Erreur",
+        description: "ID de facture manquant",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      setCreating(true); // Show loading state
+      console.log(`🔄 Changing invoice ${invoiceId} status to ${newStatus}`);
+
+      // IMPORTANT: Only send status field, no other data
+      const updateData = { status: newStatus };
+      console.log('📤 Sending update:', updateData);
+
+      const response = await invoiceApi.update(invoiceId, updateData);
+
+      if (response && response.success) {
+        console.log("✅ Status updated successfully:", response.data);
+
+        toast({
+          title: "Succès",
+          description: `Statut mis à jour: ${formatStatus(newStatus)}`,
+        });
+
+        // Reload invoices to get complete updated data from server
+        try {
+          setLoading(true);
+          const invoicesRes = await invoiceApi.getAll();
+          if (invoicesRes.success && Array.isArray(invoicesRes.data)) {
+            setInvoicesList(invoicesRes.data);
+            console.log(`✅ Reloaded ${invoicesRes.data.length} invoices`);
+          }
+        } catch (reloadError) {
+          console.error("Error reloading invoices:", reloadError);
+          // Don't show error toast, status was updated successfully
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        throw new Error(response?.message || "Échec de la mise à jour du statut");
+      }
+    } catch (error) {
+      console.error("❌ Status change error:", error);
+      const errorMessage = error instanceof Error ? error.message : "Erreur inconnue";
+      toast({
+        title: "Erreur",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    } finally {
+      setCreating(false); // Hide loading state
+    }
   };
 
   const handleDownloadPDF = (invoice: any, type: "client" | "admin") => {
@@ -544,14 +636,26 @@ export default function Invoices() {
     downloadInvoiceCSV(filteredInvoices);
   };
 
-  const filteredInvoices = invoicesList.filter((invoice) => {
+  const filteredInvoices = (Array.isArray(invoicesList) ? invoicesList : []).filter((invoice) => {
+    if (!invoice) return false; // Safety check
+
     const matchesSearch =
-      invoice.client.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      invoice.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase());
+      (invoice.client || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (invoice.invoiceNumber || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (invoice.project || "").toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus =
       filterStatus === "all" || invoice.status === filterStatus;
     return matchesSearch && matchesStatus;
   });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="h-8 w-8 animate-spin mr-2" />
+        <span>Chargement des factures...</span>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -588,10 +692,17 @@ export default function Invoices() {
                   facture
                 </DialogDescription>
               </DialogHeader>
-              <InvoiceForm
-                onSubmit={handleCreateInvoice}
-                onCancel={() => setIsCreateDialogOpen(false)}
-              />
+              {creating ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin mr-2" />
+                  <span>Création de la facture...</span>
+                </div>
+              ) : (
+                <InvoiceForm
+                  onSubmit={handleCreateInvoice}
+                  onCancel={() => setIsCreateDialogOpen(false)}
+                />
+              )}
             </DialogContent>
           </Dialog>
         </div>
@@ -686,9 +797,73 @@ export default function Invoices() {
                         <Edit className="mr-2 h-4 w-4" />
                         Modifier
                       </DropdownMenuItem>
-                      <DropdownMenuItem className="text-destructive">
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Supprimer
+
+                      {/* Status Change Submenu */}
+                      <div className="px-2 py-1.5 text-sm font-semibold">
+                        Changer le statut
+                      </div>
+                      <DropdownMenuItem
+                        onClick={() => handleStatusChange(invoice.id, "draft")}
+                        disabled={invoice.status === "draft"}
+                      >
+                        <FileText className="mr-2 h-4 w-4" />
+                        Brouillon
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleStatusChange(invoice.id, "pending")}
+                        disabled={invoice.status === "pending"}
+                      >
+                        <Clock className="mr-2 h-4 w-4" />
+                        En attente
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleStatusChange(invoice.id, "paid")}
+                        disabled={invoice.status === "paid"}
+                        className="text-nomedia-green"
+                      >
+                        <CheckCircle className="mr-2 h-4 w-4" />
+                        Payée
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={() => handleStatusChange(invoice.id, "overdue")}
+                        disabled={invoice.status === "overdue"}
+                        className="text-nomedia-orange"
+                      >
+                        <AlertTriangle className="mr-2 h-4 w-4" />
+                        En retard
+                      </DropdownMenuItem>
+
+                      <div className="h-px bg-border my-1" />
+
+                      <DropdownMenuItem
+                        className="text-destructive"
+                        onClick={() => {
+                          const invoiceId = invoice.id;
+                          if (!invoiceId) {
+                            toast({
+                              title: "Erreur",
+                              description: "ID de facture manquant",
+                              variant: "destructive",
+                            });
+                            return;
+                          }
+                          if (confirm(`Êtes-vous sûr de vouloir supprimer la facture "${invoice.invoiceNumber}" ?`)) {
+                            handleDeleteInvoice(invoiceId);
+                          }
+                        }}
+                        disabled={deleting === invoice.id}
+                      >
+                        {deleting === invoice.id ? (
+                          <>
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            Suppression...
+                          </>
+                        ) : (
+                          <>
+                            <Trash2 className="mr-2 h-4 w-4" />
+                            Supprimer
+                          </>
+                        )}
                       </DropdownMenuItem>
                     </InvoiceManagerRestriction>
                   </DropdownMenuContent>
