@@ -252,7 +252,7 @@ export default function Employees() {
     }
 
     try {
-      setCreating(true);
+      // Note: loading state is automatically managed by createEmployeeMutation.isPending
 
       const departmentId = parseInt(newEmployee.department);
 
