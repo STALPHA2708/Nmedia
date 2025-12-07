@@ -10,7 +10,7 @@
     "dev:client": "vite",
     "build": "vite build",
     "build:server": "tsx server/node-build.ts",
-    "start": "node dist/server.js",
+    "start": "tsx server/index.ts",
     "start:prod": "NODE_ENV=production npm start",
     "start:dev": "NODE_ENV=development npm run dev",
     "setup-db": "tsx server/scripts/update-schema.ts",
@@ -70,6 +70,8 @@
     "sqlite3": "^5.1.7",
     "tailwind-merge": "^2.2.0",
     "tailwindcss-animate": "^1.0.7",
+    "tsx": "^4.6.2",
+    "typescript": "^5.2.2",
     "use-debounce": "^10.0.6",
     "zod": "^3.25.76"
   },
@@ -92,8 +94,6 @@
     "nodemon": "^3.0.2",
     "postcss": "^8.4.32",
     "tailwindcss": "^3.4.0",
-    "tsx": "^4.6.2",
-    "typescript": "^5.2.2",
     "vite": "^5.0.8"
   },
   "keywords": [
