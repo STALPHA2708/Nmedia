@@ -192,6 +192,7 @@ export default function Expenses() {
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [expenseToDelete, setExpenseToDelete] = useState<Expense | null>(null);
+  const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -931,7 +932,10 @@ export default function Expenses() {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <DropdownMenu>
+                      <DropdownMenu
+                        open={openDropdownId === expense.id}
+                        onOpenChange={(open) => setOpenDropdownId(open ? expense.id : null)}
+                      >
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="sm">
                             <MoreHorizontal className="h-4 w-4" />
@@ -939,13 +943,16 @@ export default function Expenses() {
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
                           <DropdownMenuItem
-                            onClick={() => setSelectedExpense(expense)}
+                            onClick={() => {
+                              setOpenDropdownId(null);
+                              setSelectedExpense(expense);
+                            }}
                           >
                             <Eye className="mr-2 h-4 w-4" />
                             Voir détails
                           </DropdownMenuItem>
                           {expense.receipt_file && (
-                            <DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => setOpenDropdownId(null)}>
                               <Download className="mr-2 h-4 w-4" />
                               Télécharger justificatif
                             </DropdownMenuItem>
@@ -953,13 +960,19 @@ export default function Expenses() {
                           {expense.status === "pending" && (
                             <>
                               <DropdownMenuItem
-                                onClick={() => handleApproveExpense(expense)}
+                                onClick={() => {
+                                  setOpenDropdownId(null);
+                                  handleApproveExpense(expense);
+                                }}
                                 className="text-nomedia-green"
                               >
                                 Approuver
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                onClick={() => handleRejectExpense(expense)}
+                                onClick={() => {
+                                  setOpenDropdownId(null);
+                                  handleRejectExpense(expense);
+                                }}
                                 className="text-destructive"
                               >
                                 Rejeter
@@ -968,7 +981,10 @@ export default function Expenses() {
                           )}
                           {(expense.status === "pending" || user?.role === "admin") && (
                             <DropdownMenuItem
-                              onClick={() => setExpenseToDelete(expense)}
+                              onClick={() => {
+                                setOpenDropdownId(null);
+                                setExpenseToDelete(expense);
+                              }}
                               className="text-destructive"
                               disabled={deleting === expense.id || isUpdating}
                             >

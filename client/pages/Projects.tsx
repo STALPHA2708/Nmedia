@@ -127,6 +127,7 @@ export default function Projects() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
   const { toast } = useToast();
 
   // Cleanup effect - reset all dialogs when navigating away
@@ -410,7 +411,10 @@ export default function Projects() {
                     {project.client_name}
                   </CardDescription>
                 </div>
-                <DropdownMenu>
+                <DropdownMenu
+                  open={openDropdownId === (project.id || project.project_id)}
+                  onOpenChange={(open) => setOpenDropdownId(open ? (project.id || project.project_id) : null)}
+                >
                   <DropdownMenuTrigger asChild>
                     <Button
                       variant="ghost"
@@ -422,17 +426,23 @@ export default function Projects() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem
-                      onClick={() => setSelectedProject(project)}
+                      onClick={() => {
+                        setOpenDropdownId(null);
+                        setSelectedProject(project);
+                      }}
                     >
                       <Eye className="mr-2 h-4 w-4" />
                       Voir détails
                     </DropdownMenuItem>
-                    <DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => setOpenDropdownId(null)}>
                       <FileText className="mr-2 h-4 w-4" />
                       Gérer contrats
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      onClick={() => handleEditProject(project)}
+                      onClick={() => {
+                        setOpenDropdownId(null);
+                        handleEditProject(project);
+                      }}
                     >
                       <Edit className="mr-2 h-4 w-4" />
                       Modifier
@@ -440,6 +450,7 @@ export default function Projects() {
                     <DropdownMenuItem
                       className="text-destructive"
                       onClick={() => {
+                        setOpenDropdownId(null);
                         // Handle different possible ID field names
                         const projectId = project.id || project.project_id;
                         console.log("Attempting to delete project:", project);

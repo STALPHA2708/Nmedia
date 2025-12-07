@@ -115,6 +115,7 @@ export default function Employees() {
   const [editingEmployee, setEditingEmployee] = useState<Employee | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [currentTab, setCurrentTab] = useState("personal");
+  const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
   const { toast } = useToast();
 
   // Cleanup effect - reset all dialogs and states when navigating away
@@ -1570,7 +1571,10 @@ export default function Employees() {
                     <CardDescription>{employee.position}</CardDescription>
                   </div>
                 </div>
-                <DropdownMenu>
+                <DropdownMenu
+                  open={openDropdownId === employee.id}
+                  onOpenChange={(open) => setOpenDropdownId(open ? employee.id : null)}
+                >
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm">
                       <MoreHorizontal className="h-4 w-4" />
@@ -1578,19 +1582,26 @@ export default function Employees() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem
-                      onClick={() => setSelectedEmployee(employee)}
+                      onClick={() => {
+                        setOpenDropdownId(null);
+                        setSelectedEmployee(employee);
+                      }}
                     >
                       <Eye className="mr-2 h-4 w-4" />
                       Voir profil
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      onClick={() => handleEditEmployee(employee)}
+                      onClick={() => {
+                        setOpenDropdownId(null);
+                        handleEditEmployee(employee);
+                      }}
                     >
                       <Edit className="mr-2 h-4 w-4" />
                       Modifier
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       onClick={() => {
+                        setOpenDropdownId(null);
                         setSelectedEmployee(employee);
                         // Set to contracts tab
                         setTimeout(() => {
@@ -1612,6 +1623,7 @@ export default function Employees() {
                     <DropdownMenuItem
                       className="text-destructive"
                       onClick={() => {
+                        setOpenDropdownId(null);
                         if (
                           confirm(
                             `Êtes-vous sûr de vouloir supprimer ${employee.first_name} ${employee.last_name} ?`,

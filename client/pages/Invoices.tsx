@@ -449,6 +449,7 @@ export default function Invoices() {
   const [creating, setCreating] = useState(false);
   const [updatingStatus, setUpdatingStatus] = useState<number | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
+  const [openDropdownId, setOpenDropdownId] = useState<number | null>(null);
   const { toast } = useToast();
 
   // Load invoices on mount
@@ -580,6 +581,9 @@ export default function Invoices() {
       });
       return;
     }
+
+    // Close dropdown immediately to prevent UI blocking
+    setOpenDropdownId(null);
 
     try {
       setUpdatingStatus(invoiceId); // Show loading state for this specific invoice
@@ -752,7 +756,10 @@ export default function Invoices() {
                     {invoice.client} - {invoice.project}
                   </CardDescription>
                 </div>
-                <DropdownMenu>
+                <DropdownMenu
+                  open={openDropdownId === invoice.id}
+                  onOpenChange={(open) => setOpenDropdownId(open ? invoice.id : null)}
+                >
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" size="sm">
                       <MoreHorizontal className="h-4 w-4" />
@@ -760,7 +767,10 @@ export default function Invoices() {
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
                     <DropdownMenuItem
-                      onClick={() => setSelectedInvoice(invoice)}
+                      onClick={() => {
+                        setOpenDropdownId(null);
+                        setSelectedInvoice(invoice);
+                      }}
                     >
                       <Eye className="mr-2 h-4 w-4" />
                       Prévisualiser
@@ -829,6 +839,7 @@ export default function Invoices() {
                       <DropdownMenuItem
                         className="text-destructive"
                         onClick={() => {
+                          setOpenDropdownId(null);
                           const invoiceId = invoice.id;
                           if (!invoiceId) {
                             toast({
