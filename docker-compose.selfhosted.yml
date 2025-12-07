@@ -1,0 +1,140 @@
+version: '3.8'
+
+# =============================================================================
+# Nomedia Self-Hosted Docker Compose Configuration
+# =============================================================================
+# This file contains everything needed to run Nomedia on your local computer
+#
+# Quick Start:
+#   1. Copy .env.example to .env and configure your settings
+#   2. Run: docker-compose -f docker-compose.selfhosted.yml up -d
+#   3. Access at: http://localhost:8000
+# =============================================================================
+
+services:
+  # PostgreSQL Database
+  # Stores all your application data (employees, projects, invoices, etc.)
+  database:
+    image: postgres:15-alpine
+    container_name: nomedia-database
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-nomedia}
+      POSTGRES_USER: ${DB_USER:-nomedia_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-nomedia_secure_password_change_me}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8"
+    ports:
+      # Expose PostgreSQL on port 5432 (accessible from host)
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      # Persistent database storage (survives container restarts)
+      - database_data:/var/lib/postgresql/data
+      # Backup directory (accessible from host)
+      - ./backups:/backups
+    networks:
+      - nomedia-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-nomedia_user} -d ${DB_NAME:-nomedia}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # Nomedia Application
+  # The main web application (frontend + backend)
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: nomedia-app
+    restart: unless-stopped
+    ports:
+      # Main application port (access at http://localhost:8000)
+      - "${PORT:-8000}:8000"
+    environment:
+      # Application environment
+      NODE_ENV: production
+      PORT: 8000
+
+      # Database configuration (connects to 'database' service)
+      DATABASE_TYPE: postgresql
+      DATABASE_URL: postgresql://${DB_USER:-nomedia_user}:${DB_PASSWORD:-nomedia_secure_password_change_me}@database:5432/${DB_NAME:-nomedia}
+      DB_SSL: false
+
+      # Security secrets (CHANGE THESE IN PRODUCTION!)
+      JWT_SECRET: ${JWT_SECRET:-change-this-to-random-string-in-production}
+      SESSION_SECRET: ${SESSION_SECRET:-change-this-to-another-random-string}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-7d}
+      BCRYPT_ROUNDS: ${BCRYPT_ROUNDS:-12}
+
+      # File upload settings
+      MAX_FILE_SIZE: ${MAX_FILE_SIZE:-10485760}
+      UPLOAD_DIR: /app/uploads
+
+      # Optional: Email configuration (for notifications)
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+
+      # Application URLs
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:8000/api}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:8000}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8000}
+
+      # Logging
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      DEBUG: ${DEBUG:-false}
+
+    volumes:
+      # Persistent file uploads (invoices, documents, etc.)
+      - uploads_data:/app/uploads
+      # Application logs
+      - logs_data:/app/logs
+      # SQLite data directory (if using SQLite mode)
+      - sqlite_data:/app/data
+
+    depends_on:
+      database:
+        condition: service_healthy
+
+    networks:
+      - nomedia-network
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+# =============================================================================
+# Persistent Data Volumes
+# =============================================================================
+# These volumes store your data permanently, even when containers are removed
+# To backup: docker run --rm -v nomedia_database_data:/data -v $(pwd)/backups:/backup alpine tar czf /backup/database_backup.tar.gz /data
+volumes:
+  database_data:
+    driver: local
+    name: nomedia_database_data
+
+  uploads_data:
+    driver: local
+    name: nomedia_uploads_data
+
+  logs_data:
+    driver: local
+    name: nomedia_logs_data
+
+  sqlite_data:
+    driver: local
+    name: nomedia_sqlite_data
+
+# =============================================================================
+# Internal Network
+# =============================================================================
+# Isolated network for secure communication between services
+networks:
+  nomedia-network:
+    driver: bridge
+    name: nomedia-network
