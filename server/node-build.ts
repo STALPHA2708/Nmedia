@@ -1,4 +1,5 @@
 import path from "path";
+import { fileURLToPath } from "url";
 import { createServer } from "./index";
 import * as express from "express";
 
@@ -7,8 +8,11 @@ async function startServer() {
   const port = process.env.PORT || 3000;
 
   // In production, serve the built SPA files
-  const __dirname = import.meta.dirname;
-  const distPath = path.join(__dirname, "../spa");
+  // Use fileURLToPath for Node 18 compatibility (import.meta.dirname is Node 20+)
+  const __filename = fileURLToPath(import.meta.url);
+  const __dirname = path.dirname(__filename);
+  // In Docker: __dirname is /app/dist/server, we need /app/dist for frontend files
+  const distPath = path.join(__dirname, "..");
 
   // Serve static files
   app.use(express.static(distPath));
