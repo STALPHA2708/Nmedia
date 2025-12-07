@@ -173,13 +173,13 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         updated_at TIMESTAMP DEFAULT NOW()
       )`,
 
-      // Departments table
+      // Departments table (without foreign key to avoid circular dependency)
       `CREATE TABLE IF NOT EXISTS departments (
         id SERIAL PRIMARY KEY,
         name TEXT NOT NULL UNIQUE,
         description TEXT,
         budget DECIMAL DEFAULT 0,
-        manager_id INTEGER REFERENCES employees(id),
+        manager_id INTEGER,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       )`,
@@ -194,7 +194,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         updated_at TIMESTAMP DEFAULT NOW()
       )`,
 
-      // Employees table
+      // Employees table (without foreign key to avoid circular dependency)
       `CREATE TABLE IF NOT EXISTS employees (
         id SERIAL PRIMARY KEY,
         first_name TEXT NOT NULL,
@@ -202,7 +202,7 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         email TEXT UNIQUE NOT NULL,
         phone TEXT,
         position TEXT,
-        department_id INTEGER REFERENCES departments(id),
+        department_id INTEGER,
         salary DECIMAL DEFAULT 0,
         contract_type TEXT,
         hire_date DATE,
