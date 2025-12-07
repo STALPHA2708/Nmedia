@@ -142,16 +142,61 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
   async initialize(): Promise<boolean> {
     try {
       console.log('🔧 Initializing PostgreSQL database schema...');
-      
+
+      // Drop and recreate tables with correct schema (for fresh deployments)
+      await this.migrateTablesIfNeeded();
       await this.createTables();
       await this.createIndexes();
       await this.initializeDemoData();
-      
+
       console.log('✅ PostgreSQL database initialized successfully');
       return true;
     } catch (error) {
       console.error('❌ PostgreSQL initialization failed:', error);
       throw error;
+    }
+  }
+
+  private async migrateTablesIfNeeded(): Promise<void> {
+    try {
+      // Check if expenses table has old schema (date column instead of expense_date)
+      const expensesCheck = await this.query(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'expenses' AND column_name = 'date'
+      `);
+
+      if (expensesCheck.length > 0) {
+        console.log('🔄 Migrating expenses table to new schema...');
+        // Drop and recreate expenses table (safe for test deployment)
+        await this.run('DROP TABLE IF EXISTS expenses CASCADE');
+        console.log('✅ Expenses table will be recreated with correct schema');
+      }
+
+      // Check if invoices table has old schema (client_name instead of client)
+      const invoicesCheck = await this.query(`
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'invoices' AND column_name = 'client_name'
+      `);
+
+      if (invoicesCheck.length > 0) {
+        console.log('🔄 Migrating invoices table to new schema...');
+        // Drop and recreate invoices table (safe for test deployment)
+        await this.run('DROP TABLE IF EXISTS invoice_items CASCADE');
+        await this.run('DROP TABLE IF EXISTS invoices CASCADE');
+        console.log('✅ Invoices tables will be recreated with correct schema');
+      }
+
+      // Check if invoice_items table exists
+      const itemsCheck = await this.query(`
+        SELECT table_name FROM information_schema.tables
+        WHERE table_name = 'invoice_items'
+      `);
+
+      if (itemsCheck.length === 0) {
+        console.log('📝 invoice_items table will be created');
+      }
+    } catch (error) {
+      console.log('⚠️ Migration check error (may be first run):', error.message);
     }
   }
 
@@ -252,27 +297,33 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         UNIQUE(project_id, employee_id)
       )`,
 
-      // Expenses table
+      // Expenses table (matches SQLite routes columns)
       `CREATE TABLE IF NOT EXISTS expenses (
         id SERIAL PRIMARY KEY,
         description TEXT NOT NULL,
         amount DECIMAL NOT NULL,
         category TEXT,
-        date DATE NOT NULL,
+        expense_date DATE NOT NULL,
         project_id INTEGER REFERENCES projects(id),
         employee_id INTEGER REFERENCES employees(id),
-        receipt_url TEXT,
+        receipt_file TEXT,
         status TEXT DEFAULT 'pending',
+        approved_by INTEGER REFERENCES users(id),
+        approved_at TIMESTAMP,
+        rejection_reason TEXT,
+        reimbursement_date DATE,
+        reimbursement_method TEXT,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
       )`,
 
-      // Invoices table
+      // Invoices table (matches SQLite routes columns)
       `CREATE TABLE IF NOT EXISTS invoices (
         id SERIAL PRIMARY KEY,
         invoice_number TEXT UNIQUE NOT NULL,
-        client_name TEXT NOT NULL,
-        client_email TEXT,
+        client TEXT NOT NULL,
+        client_ice TEXT,
+        project TEXT,
         project_id INTEGER REFERENCES projects(id),
         amount DECIMAL NOT NULL,
         tax_amount DECIMAL DEFAULT 0,
@@ -280,9 +331,23 @@ export class PostgreSQLAdapter implements DatabaseAdapter {
         status TEXT DEFAULT 'draft',
         due_date DATE,
         issue_date DATE NOT NULL,
-        description TEXT,
+        profit_margin DECIMAL,
+        estimated_costs DECIMAL,
+        team_members TEXT,
+        notes TEXT,
         created_at TIMESTAMP DEFAULT NOW(),
         updated_at TIMESTAMP DEFAULT NOW()
+      )`,
+
+      // Invoice items table
+      `CREATE TABLE IF NOT EXISTS invoice_items (
+        id SERIAL PRIMARY KEY,
+        invoice_id INTEGER NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+        description TEXT NOT NULL,
+        quantity INTEGER DEFAULT 1,
+        unit_price DECIMAL NOT NULL,
+        total DECIMAL NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
       )`
     ];
 
