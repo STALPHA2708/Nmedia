@@ -1,11 +1,10 @@
 services:
   - type: web
     name: nomedia
-    runtime: node
+    runtime: docker
     region: frankfurt
     plan: free
-    buildCommand: npm install && npm run build
-    startCommand: npm start
+    dockerfilePath: ./Dockerfile
     envVars:
       - key: NODE_ENV
         value: production
@@ -22,7 +21,9 @@ services:
       - key: JWT_EXPIRES_IN
         value: 7d
       - key: BCRYPT_ROUNDS
-        value: 12
+        value: "12"
+      - key: PORT
+        value: "8000"
 
 databases:
   - name: nomedia-db
