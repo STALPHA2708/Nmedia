@@ -35,12 +35,8 @@ data
 .env
 load-ids.txt
 
-server
 tmp
 types
-.git
-.gitignore
-dist
 service
 tests
 fixtures-pages
