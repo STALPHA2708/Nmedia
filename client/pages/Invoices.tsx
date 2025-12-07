@@ -447,6 +447,7 @@ export default function Invoices() {
   const [invoicesList, setInvoicesList] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [updatingStatus, setUpdatingStatus] = useState<number | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
   const { toast } = useToast();
 
@@ -581,7 +582,7 @@ export default function Invoices() {
     }
 
     try {
-      setCreating(true); // Show loading state
+      setUpdatingStatus(invoiceId); // Show loading state for this specific invoice
       console.log(`🔄 Changing invoice ${invoiceId} status to ${newStatus}`);
 
       // IMPORTANT: Only send status field, no other data
@@ -593,25 +594,15 @@ export default function Invoices() {
       if (response && response.success) {
         console.log("✅ Status updated successfully:", response.data);
 
+        // Update the local state immediately for better UX
+        setInvoicesList(prev => prev.map(inv =>
+          inv.id === invoiceId ? { ...inv, status: newStatus } : inv
+        ));
+
         toast({
           title: "Succès",
           description: `Statut mis à jour: ${formatStatus(newStatus)}`,
         });
-
-        // Reload invoices to get complete updated data from server
-        try {
-          setLoading(true);
-          const invoicesRes = await invoiceApi.getAll();
-          if (invoicesRes.success && Array.isArray(invoicesRes.data)) {
-            setInvoicesList(invoicesRes.data);
-            console.log(`✅ Reloaded ${invoicesRes.data.length} invoices`);
-          }
-        } catch (reloadError) {
-          console.error("Error reloading invoices:", reloadError);
-          // Don't show error toast, status was updated successfully
-        } finally {
-          setLoading(false);
-        }
       } else {
         throw new Error(response?.message || "Échec de la mise à jour du statut");
       }
@@ -624,7 +615,7 @@ export default function Invoices() {
         variant: "destructive",
       });
     } finally {
-      setCreating(false); // Hide loading state
+      setUpdatingStatus(null); // Hide loading state
     }
   };
 
@@ -800,25 +791,25 @@ export default function Invoices() {
 
                       {/* Status Change Submenu */}
                       <div className="px-2 py-1.5 text-sm font-semibold">
-                        Changer le statut
+                        Changer le statut {updatingStatus === invoice.id && <Loader2 className="inline ml-1 h-3 w-3 animate-spin" />}
                       </div>
                       <DropdownMenuItem
                         onClick={() => handleStatusChange(invoice.id, "draft")}
-                        disabled={invoice.status === "draft"}
+                        disabled={invoice.status === "draft" || updatingStatus === invoice.id}
                       >
                         <FileText className="mr-2 h-4 w-4" />
                         Brouillon
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => handleStatusChange(invoice.id, "pending")}
-                        disabled={invoice.status === "pending"}
+                        disabled={invoice.status === "pending" || updatingStatus === invoice.id}
                       >
                         <Clock className="mr-2 h-4 w-4" />
                         En attente
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => handleStatusChange(invoice.id, "paid")}
-                        disabled={invoice.status === "paid"}
+                        disabled={invoice.status === "paid" || updatingStatus === invoice.id}
                         className="text-nomedia-green"
                       >
                         <CheckCircle className="mr-2 h-4 w-4" />
@@ -826,7 +817,7 @@ export default function Invoices() {
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={() => handleStatusChange(invoice.id, "overdue")}
-                        disabled={invoice.status === "overdue"}
+                        disabled={invoice.status === "overdue" || updatingStatus === invoice.id}
                         className="text-nomedia-orange"
                       >
                         <AlertTriangle className="mr-2 h-4 w-4" />
