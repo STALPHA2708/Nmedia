@@ -387,7 +387,7 @@ const AdminInvoiceTemplate = ({ invoice }: { invoice: any }) => (
             <br />• Coûts de production estimés:{" "}
             {(invoice.amount * 0.7).toLocaleString()} MAD
             <br />• ROI projeté:{" "}
-            {(((invoice.amount * 0.3) / invoice.amount) * 100).toFixed(1)}%
+            {invoice.amount > 0 ? (((invoice.amount * 0.3) / invoice.amount) * 100).toFixed(1) : "0.0"}%
             <br />• Délai de paiement:{" "}
             {Math.ceil(
               (new Date(invoice.dueDate).getTime() -

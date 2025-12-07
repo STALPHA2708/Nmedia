@@ -513,7 +513,7 @@ export default function Projects() {
                   <span>{formatCurrency(project.spent)}</span>
                 </div>
                 <Progress
-                  value={(project.spent / project.budget) * 100}
+                  value={project.budget > 0 ? (project.spent / project.budget) * 100 : 0}
                   className="h-1"
                 />
               </div>
@@ -706,17 +706,17 @@ export default function Projects() {
                         <div className="flex justify-between text-sm mb-2">
                           <span>Budget utilisé</span>
                           <span>
-                            {(
-                              (selectedProject.spent / selectedProject.budget) *
-                              100
-                            ).toFixed(1)}
+                            {selectedProject.budget > 0
+                              ? ((selectedProject.spent / selectedProject.budget) * 100).toFixed(1)
+                              : "0.0"}
                             %
                           </span>
                         </div>
                         <Progress
                           value={
-                            (selectedProject.spent / selectedProject.budget) *
-                            100
+                            selectedProject.budget > 0
+                              ? (selectedProject.spent / selectedProject.budget) * 100
+                              : 0
                           }
                         />
                       </div>

@@ -133,34 +133,44 @@ export async function initializeFallbackData() {
     },
   ];
 
-  // Create demo users
-  const hashedPassword = await bcrypt.hash("admin123", 10);
-  users = [
-    {
-      id: getNextId(),
-      email: "admin@nomedia.ma",
-      password: hashedPassword,
-      first_name: "Admin",
-      last_name: "Principal",
-      role: "admin",
-      status: "active",
-      permissions: "{}",
-      created_at: new Date(),
-      updated_at: new Date(),
-    },
-    {
-      id: getNextId(),
-      email: "test@test.com",
-      password: await bcrypt.hash("password", 10),
-      first_name: "Test",
-      last_name: "User",
-      role: "user",
-      status: "active",
-      permissions: "{}",
-      created_at: new Date(),
-      updated_at: new Date(),
-    },
-  ];
+  // Create demo users ONLY in development mode
+  if (process.env.NODE_ENV === "production") {
+    console.warn(
+      "⚠️  Production mode: No default users created. " +
+      "Use the registration endpoint or database seeding script to create users."
+    );
+    users = [];
+  } else {
+    // Development only - create demo users for testing
+    console.log("🔧 Development mode: Creating demo users for testing");
+    const hashedPassword = await bcrypt.hash("admin123", 10);
+    users = [
+      {
+        id: getNextId(),
+        email: "admin@nomedia.ma",
+        password: hashedPassword,
+        first_name: "Admin",
+        last_name: "Principal",
+        role: "admin",
+        status: "active",
+        permissions: "{}",
+        created_at: new Date(),
+        updated_at: new Date(),
+      },
+      {
+        id: getNextId(),
+        email: "test@test.com",
+        password: await bcrypt.hash("password", 10),
+        first_name: "Test",
+        last_name: "User",
+        role: "user",
+        status: "active",
+        permissions: "{}",
+        created_at: new Date(),
+        updated_at: new Date(),
+      },
+    ];
+  }
 
   // Initialize empty employees array - no demo data
   employees = [];

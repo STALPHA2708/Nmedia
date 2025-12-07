@@ -10,9 +10,23 @@ import type {
 
 const router = Router();
 
-// JWT secret - in production this should be in environment variables
-const JWT_SECRET =
-  process.env.JWT_SECRET || "your-super-secret-jwt-key-change-in-production";
+// JWT secret - MUST be set in environment variables for production
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "CRITICAL: JWT_SECRET environment variable is not set! " +
+      "Generate one with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\""
+    );
+  }
+  console.warn(
+    "⚠️  WARNING: JWT_SECRET not set. Using development fallback. " +
+    "DO NOT use in production!"
+  );
+}
+
+const JWT_SECRET_KEY = JWT_SECRET || "dev-only-insecure-jwt-secret-do-not-use-in-production";
 
 // Test route to verify auth router is working
 router.get("/test", (req, res) => {
@@ -223,7 +237,7 @@ router.post("/login", async (req, res) => {
     };
 
     const tokenExpiry = rememberMe ? "30d" : "24h";
-    const token = jwt.sign(tokenPayload, JWT_SECRET, {
+    const token = jwt.sign(tokenPayload, JWT_SECRET_KEY, {
       expiresIn: tokenExpiry,
     });
 
@@ -283,7 +297,7 @@ router.get("/me", async (req, res) => {
       });
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    const decoded = jwt.verify(token, JWT_SECRET_KEY) as any;
 
     // Get fresh user data from database
     const user = await get(
@@ -340,7 +354,7 @@ router.put("/change-password", async (req, res) => {
       });
     }
 
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    const decoded = jwt.verify(token, JWT_SECRET_KEY) as any;
     const { currentPassword, newPassword }: ChangePasswordRequest = req.body;
 
     if (!currentPassword || !newPassword) {
